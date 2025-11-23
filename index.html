@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mikil Radu Foss | Computer Science & Mathematics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="main-container">
+        <!-- Hero / Neural Network Section -->
+        <header class="hero-section">
+            <div class="canvas-container">
+                <canvas id="nn-canvas"></canvas>
+                <div class="overlay-text" id="title-overlay">
+                    <!-- Text will be drawn by the NN, but we keep this for accessibility/fallback -->
+                    <h1 class="sr-only">Mikil Radu Foss</h1>
+                </div>
+            </div>
+            <div class="loss-graph-container">
+                <h3>Training Loss</h3>
+                <canvas id="loss-canvas"></canvas>
+                <div class="stats">
+                    <span>Epoch: <span id="epoch-counter">0</span></span>
+                    <span>Loss: <span id="loss-value">0.000</span></span>
+                </div>
+                <button id="retrain-btn" class="btn-small"><i class="fas fa-sync-alt"></i> Retrain</button>
+            </div>
+        </header>
+
+        <!-- Contact / Links -->
+        <section class="links-bar">
+            <a href="https://github.com/MikilFoss" target="_blank" class="icon-link"><i class="fab fa-github"></i> GitHub</a>
+            <a href="mailto:mikilradufoss@gmail.com" class="icon-link"><i class="fas fa-envelope"></i> Email</a>
+            <a href="https://arxiv.org/abs/2510.05386" target="_blank" class="icon-link"><i class="fas fa-scroll"></i> MINE Paper</a>
+            <a href="#" class="icon-link disabled"><i class="fas fa-file-pdf"></i> Download CV</a>
+        </section>
+
+        <!-- Content Grid -->
+        <div class="content-grid">
+            
+            <!-- Education -->
+            <section class="card education">
+                <h2><i class="fas fa-graduation-cap"></i> Education</h2>
+                <div class="item">
+                    <div class="header-row">
+                        <h3>University of Minnesota, Twin Cities</h3>
+                        <span class="date">Exp. Dec 2025</span>
+                    </div>
+                    <p class="subtitle">B.S. Computer Science & Mathematics (Double Major)</p>
+                    <p class="details"><strong>GPA:</strong> 3.8</p>
+                    <p class="details"><strong>Relevant Coursework:</strong> Machine Learning, Harmonic Analysis, PDEs, Quantum Physics, Graph Theory, Operating Systems, Data Structures & Algorithms.</p>
+                </div>
+            </section>
+
+            <!-- Research Highlights -->
+            <section class="card research">
+                <h2><i class="fas fa-flask"></i> Research Experience</h2>
+                
+                <div class="item">
+                    <div class="header-row">
+                        <h3>Mutual Information Neural Estimators (MINE)</h3>
+                        <span class="date">10/23 - 05/25</span>
+                    </div>
+                    <p class="subtitle">Mentor: Prof. Andrew Lamperski | <a href="https://arxiv.org/abs/2510.05386" target="_blank">Read Paper</a></p>
+                    <ul>
+                        <li>Established theoretical guarantees for MINE, deriving error bounds of $O(m^{-1/2} + T^{-1/3})$.</li>
+                        <li>Synthesized techniques from convex optimization and functional analysis for the main proof framework.</li>
+                    </ul>
+                </div>
+
+                <div class="item">
+                    <div class="header-row">
+                        <h3>Oak Ridge National Laboratory</h3>
+                        <span class="date">12/24 - Present</span>
+                    </div>
+                    <p class="subtitle">Mentors: Dr. Olena Burkovska & Dr. Konstantin Pieper</p>
+                    <ul>
+                        <li>Developed sparsity promoting algorithm for Generalized Langevin Equation memory kernels.</li>
+                        <li>Achieved 10x speedup with an $O(N)$ SDE algorithmic improvement.</li>
+                    </ul>
+                </div>
+
+                <div class="item">
+                    <div class="header-row">
+                        <h3>Neural Network Compressiveness</h3>
+                        <span class="date">02/24 - 02/25</span>
+                    </div>
+                    <p class="subtitle">Mentor: Prof. Vladimir Sverak</p>
+                    <ul>
+                        <li>Analyzed compressiveness of NNs vs Fourier series for PDE steady state solutions.</li>
+                        <li>Utilized RK4, Spectral methods, and Godunov's scheme.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Experience -->
+            <section class="card experience">
+                <h2><i class="fas fa-briefcase"></i> Experience</h2>
+                
+                <div class="item">
+                    <div class="header-row">
+                        <h3>Creevo.app</h3>
+                        <span class="tag">Founder</span>
+                    </div>
+                    <p class="subtitle">12/24 - Present</p>
+                    <ul>
+                        <li>Built MCP server for Godot game engine.</li>
+                        <li>Trained custom coding agent using GRPO.</li>
+                        <li>Designed Creevo Agent Library (CAL) for multimodal tool responses.</li>
+                    </ul>
+                </div>
+
+                <div class="item">
+                    <div class="header-row">
+                        <h3>Anchovy</h3>
+                        <span class="tag">Full Stack Engineer</span>
+                    </div>
+                    <p class="subtitle">05/25 - Present</p>
+                    <ul>
+                        <li>Redesigned OpenAI SDK for multimodal prompts.</li>
+                        <li>Implemented marketplace for cookbooks.</li>
+                    </ul>
+                </div>
+
+                <div class="item">
+                    <div class="header-row">
+                        <h3>Amway</h3>
+                        <span class="tag">Software Engineering Intern</span>
+                    </div>
+                    <p class="subtitle">05/23 - 06/24</p>
+                    <ul>
+                        <li>Designed AWS system to monitor Kubernetes & Gluu processes.</li>
+                        <li>Analyzed user registration data to identify 60% decline cause.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Skills -->
+            <section class="card skills">
+                <h2><i class="fas fa-code"></i> Skills</h2>
+                <div class="skill-tags">
+                    <span>Python</span><span>C++</span><span>Java</span><span>JavaScript</span>
+                    <span>TensorFlow</span><span>JAX</span><span>PyTorch</span><span>ReactJS</span>
+                    <span>Docker</span><span>Kubernetes</span><span>AWS</span><span>LaTeX</span>
+                    <span>LLMs</span><span>Generative AI</span><span>MCP</span>
+                </div>
+            </section>
+
+            <!-- Projects / Placeholder -->
+            <section class="card projects">
+                <h2><i class="fas fa-project-diagram"></i> Side Projects</h2>
+                <div class="project-buttons">
+                    <a href="#" class="project-btn disabled">
+                        <span class="title">Chess AI</span>
+                        <span class="desc">CNN + Minimax</span>
+                    </a>
+                    <a href="#" class="project-btn disabled">
+                        <span class="title">Custom ML Library</span>
+                        <span class="desc">Transformer Support</span>
+                    </a>
+                    <a href="#" class="project-btn disabled">
+                        <span class="title">Spotify Stats</span>
+                        <span class="desc">Node + React</span>
+                    </a>
+                </div>
+            </section>
+        </div>
+
+        <footer>
+            <p>&copy; 2025 Mikil Radu Foss. Built with a custom Neural Network in Vanilla JS.</p>
+        </footer>
+    </div>
+
+    <!-- MathJax for LaTeX rendering -->
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']]
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
