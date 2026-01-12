@@ -119,6 +119,8 @@ class MLP {
         const batchSize = this.output.rows;
         const outputDim = this.output.cols;
         
+        if (!targets || targets.length === 0) return 0;
+
         // 1. Calculate Loss & Gradients at Output
         // For each output point, find closest target
         let totalLoss = 0;
@@ -340,6 +342,18 @@ function initTargets() {
         targetPoints = targetPoints.sort(() => 0.5 - Math.random()).slice(0, CONFIG.particleCount);
     }
     
+    // Fallback if no points found (e.g. font didn't load or canvas issue)
+    if (targetPoints.length === 0) {
+        console.warn("No target points generated. Using fallback circle.");
+        for(let i=0; i<CONFIG.particleCount; i++) {
+            const angle = (i / CONFIG.particleCount) * Math.PI * 2;
+            targetPoints.push({
+                x: Math.cos(angle) * 0.5,
+                y: Math.sin(angle) * 0.5
+            });
+        }
+    }
+    
     // Restart training
     initNetwork();
 }
@@ -424,6 +438,19 @@ function animate() {
 }
 
 // Init
-resize();
-document.getElementById('retrain-btn').addEventListener('click', initNetwork);
-animate();
+async function init() {
+    try {
+        await document.fonts.ready;
+    } catch (e) {
+        console.warn("Font loading API not supported or failed", e);
+    }
+    
+    // Small delay to ensure layout is stable
+    setTimeout(() => {
+        resize();
+        document.getElementById('retrain-btn').addEventListener('click', initNetwork);
+        animate();
+    }, 100);
+}
+
+init();

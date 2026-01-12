@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,6 +12,7 @@
     <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
+
 <body>
     <div class="main-container">
         <!-- Hero / Neural Network Section -->
@@ -35,15 +37,16 @@
 
         <!-- Contact / Links -->
         <section class="links-bar">
-            <a href="https://github.com/MikilFoss" target="_blank" class="icon-link"><i class="fab fa-github"></i> GitHub</a>
+            <a href="https://github.com/MikilFoss" target="_blank" class="icon-link"><i class="fab fa-github"></i>
+                GitHub</a>
             <a href="mailto:mikilradufoss@gmail.com" class="icon-link"><i class="fas fa-envelope"></i> Email</a>
-            <a href="https://arxiv.org/abs/2510.05386" target="_blank" class="icon-link"><i class="fas fa-scroll"></i> MINE Paper</a>
-            <a href="#" class="icon-link disabled"><i class="fas fa-file-pdf"></i> Download CV</a>
+            <a href="https://arxiv.org/abs/2510.05386" target="_blank" class="icon-link"><i class="fas fa-scroll"></i>
+                MINE Paper</a>
         </section>
 
         <!-- Content Grid -->
         <div class="content-grid">
-            
+
             <!-- Education -->
             <section class="card education">
                 <h2><i class="fas fa-graduation-cap"></i> Education</h2>
@@ -54,23 +57,27 @@
                     </div>
                     <p class="subtitle">B.S. Computer Science & Mathematics (Double Major)</p>
                     <p class="details"><strong>GPA:</strong> 3.8</p>
-                    <p class="details"><strong>Relevant Coursework:</strong> Machine Learning, Harmonic Analysis, PDEs, Quantum Physics, Graph Theory, Operating Systems, Data Structures & Algorithms.</p>
+                    <p class="details"><strong>Key Coursework:</strong> Machine Learning, Harmonic Analysis, PDEs,
+                        Quantum Physics, Graph Theory, Operating Systems, Data Structures & Algorithms.</p>
                 </div>
             </section>
 
             <!-- Research Highlights -->
             <section class="card research">
                 <h2><i class="fas fa-flask"></i> Research Experience</h2>
-                
+
                 <div class="item">
                     <div class="header-row">
                         <h3>Mutual Information Neural Estimators (MINE)</h3>
                         <span class="date">10/23 - 05/25</span>
                     </div>
-                    <p class="subtitle">Mentor: Prof. Andrew Lamperski | <a href="https://arxiv.org/abs/2510.05386" target="_blank">Read Paper</a></p>
+                    <p class="subtitle">Mentor: Prof. Andrew Lamperski | <a href="https://arxiv.org/abs/2510.05386"
+                            target="_blank">Read Paper</a></p>
                     <ul>
-                        <li>Established theoretical guarantees for MINE, deriving error bounds of $O(m^{-1/2} + T^{-1/3})$.</li>
-                        <li>Synthesized techniques from convex optimization and functional analysis for the main proof framework.</li>
+                        <li>Established rigorous theoretical guarantees for MINE by deriving quantitative error bounds
+                            of $O(m^{-1/2} + T^{-1/3})$ for KL divergence estimation using shallow neural networks.</li>
+                        <li>Synthesized advanced techniques from convex optimization and functional analysis to
+                            construct the main proof framework.</li>
                     </ul>
                 </div>
 
@@ -81,8 +88,12 @@
                     </div>
                     <p class="subtitle">Mentors: Dr. Olena Burkovska & Dr. Konstantin Pieper</p>
                     <ul>
-                        <li>Developed sparsity promoting algorithm for Generalized Langevin Equation memory kernels.</li>
-                        <li>Achieved 10x speedup with an $O(N)$ SDE algorithmic improvement.</li>
+                        <li>Developing a custom sparsity-promoting algorithm to construct neural networks that
+                            approximate the memory kernel in the Generalized Langevin Equation.</li>
+                        <li>Achieved a 10x speedup in practice by developing an $O(N)$ SDE algorithmic improvement,
+                            replacing the previous $O(N^2)$ approach.</li>
+                        <li>Conducted and documented over 100 machine learning experiments to validate the theoretical
+                            framework.</li>
                     </ul>
                 </div>
 
@@ -93,8 +104,11 @@
                     </div>
                     <p class="subtitle">Mentor: Prof. Vladimir Sverak</p>
                     <ul>
-                        <li>Analyzed compressiveness of NNs vs Fourier series for PDE steady state solutions.</li>
-                        <li>Utilized RK4, Spectral methods, and Godunov's scheme.</li>
+                        <li>Investigated the compressiveness of neural networks compared to traditional Fourier series,
+                            focusing on functions emerging as steady-state solutions to PDEs.</li>
+                        <li>Implemented numerical methods such as RK4, Spectral methods, and Godunov's scheme for PDE
+                            approximations.</li>
+                        <li>Utilized autoencoders and sparse autoencoders to measure and compare compressiveness.</li>
                     </ul>
                 </div>
             </section>
@@ -102,7 +116,7 @@
             <!-- Experience -->
             <section class="card experience">
                 <h2><i class="fas fa-briefcase"></i> Experience</h2>
-                
+
                 <div class="item">
                     <div class="header-row">
                         <h3>Creevo.app</h3>
@@ -110,9 +124,12 @@
                     </div>
                     <p class="subtitle">12/24 - Present</p>
                     <ul>
-                        <li>Built MCP server for Godot game engine.</li>
-                        <li>Trained custom coding agent using GRPO.</li>
-                        <li>Designed Creevo Agent Library (CAL) for multimodal tool responses.</li>
+                        <li>Managed a team of 4 researchers and built an MCP server for the Godot game engine.</li>
+                        <li>Trained a custom coding agent with SOTA performance using GRPO to produce Godot games.</li>
+                        <li>Designed the Creevo Agent Library (CAL), an open-source framework supporting multimodal tool
+                            responses.</li>
+                        <li>Built scaling cloud infrastructure to provide agents with access to Docker containers
+                            running Godot.</li>
                     </ul>
                 </div>
 
@@ -123,8 +140,10 @@
                     </div>
                     <p class="subtitle">05/25 - Present</p>
                     <ul>
-                        <li>Redesigned OpenAI SDK for multimodal prompts.</li>
-                        <li>Implemented marketplace for cookbooks.</li>
+                        <li>Redesigned and refactored a custom OpenAI SDK to support multimodal prompts.</li>
+                        <li>Designed and implemented a marketplace feature allowing users to create and sell cookbooks.
+                        </li>
+                        <li>Led a full app-wide UI/UX redesign for the Ionic Angular frontend.</li>
                     </ul>
                 </div>
 
@@ -135,8 +154,9 @@
                     </div>
                     <p class="subtitle">05/23 - 06/24</p>
                     <ul>
-                        <li>Designed AWS system to monitor Kubernetes & Gluu processes.</li>
-                        <li>Analyzed user registration data to identify 60% decline cause.</li>
+                        <li>Designed and implemented an AWS system to monitor Kubernetes & Gluu processes.</li>
+                        <li>Analyzed user registration data to identify and resolve an issue contributing to a 60%
+                            decline in registered users.</li>
                     </ul>
                 </div>
             </section>
@@ -188,4 +208,5 @@
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="script.js"></script>
 </body>
+
 </html>
