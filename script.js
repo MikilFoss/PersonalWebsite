@@ -1,22 +1,40 @@
 /**
- * Hero: small MLP classifies 2D points as inside/outside the axis-aligned
- * bounding box of rasterized "hi". Explore draws the network graph.
+ * Hero: bbox BCE classifier. Warmup learns a baseline; Retrain perturbs it with noise
+ * for fast convergence. Loss chart uses a wide rolling average of per-step BCE.
  */
 
 const CONFIG = {
     targetText: "hi",
     font: "bold 140px Outfit, sans-serif",
     hiddenSize: 8,
-    learningRate: 0.35,
-    batchSize: 384,
-    trainStepsPerFrame: 12,
-    gridCols: 52,
-    gridRows: 32
+    learningRate: 0.42,
+    batchSize: 4096,
+    trainStepsPerFrame: 14,
+    gridCols: 56,
+    gridRows: 34,
+    rollWindow: 160,
+    rawLossCap: 600,
+    plotPoints: 260,
+    initNoiseStd: 0.065,
+    warmupSteps: 1100,
+    warmupLr: 0.55
 };
 
 const MathUtils = {
     random: (min, max) => Math.random() * (max - min) + min
 };
+
+function gaussian() {
+    let u = 0;
+    let v = 0;
+    while (u === 0) {
+        u = Math.random();
+    }
+    while (v === 0) {
+        v = Math.random();
+    }
+    return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+}
 
 function sigmoid(x) {
     if (x >= 0) {
@@ -47,7 +65,6 @@ class Tensor {
     }
 }
 
-/** 2 -> hidden (ReLU) -> 1 logit (BCE with sigmoid) */
 class SmallMLP {
     constructor(hiddenSize) {
         this.inputSize = 2;
@@ -57,6 +74,22 @@ class SmallMLP {
         this.b1 = Tensor.zeros(1, hiddenSize);
         this.W2 = Tensor.random(hiddenSize, 1, Math.sqrt(2 / hiddenSize));
         this.b2 = Tensor.zeros(1, 1);
+    }
+
+    static fromSnapshot(snap, noiseStd) {
+        const H = snap.hiddenSize;
+        const m = new SmallMLP(H);
+        for (let i = 0; i < m.W1.data.length; i++) {
+            m.W1.data[i] = snap.W1[i] + gaussian() * noiseStd;
+        }
+        for (let i = 0; i < m.b1.data.length; i++) {
+            m.b1.data[i] = snap.b1[i] + gaussian() * noiseStd * 0.5;
+        }
+        for (let i = 0; i < m.W2.data.length; i++) {
+            m.W2.data[i] = snap.W2[i] + gaussian() * noiseStd;
+        }
+        m.b2.data[0] = snap.b2[0] + gaussian() * noiseStd * 0.5;
+        return m;
     }
 
     forward(inputs) {
@@ -137,6 +170,16 @@ class SmallMLP {
     }
 }
 
+function snapshotFromMLP(net) {
+    return {
+        hiddenSize: net.hiddenSize,
+        W1: new Float32Array(net.W1.data),
+        b1: new Float32Array(net.b1.data),
+        W2: new Float32Array(net.W2.data),
+        b2: new Float32Array(net.b2.data)
+    };
+}
+
 const canvas = document.getElementById('nn-canvas');
 const ctx = canvas.getContext('2d');
 const lossCanvas = document.getElementById('loss-canvas');
@@ -145,13 +188,21 @@ const lossCtx = lossCanvas.getContext('2d');
 let mlp;
 let batchInputs;
 let batchLabels;
-let lossHistory = [];
+let gridSampleInput = null;
 let epoch = 0;
 let exploreModalOpen = false;
-let gridSampleInput = null;
 
-/** normalized [-1,1] axis-aligned box around "hi" */
+let warmupBaselineSnapshot = null;
+let warmBaselineBboxKey = null;
+
+const lossRawRing = [];
+let smoothedPlotHistory = [];
+
 let bbox = { xmin: -0.5, xmax: 0.5, ymin: -0.5, ymax: 0.5 };
+
+function bboxToKey() {
+    return [bbox.xmin, bbox.xmax, bbox.ymin, bbox.ymax].map((v) => v.toFixed(5)).join("|");
+}
 
 function insideBbox(x, y) {
     return x >= bbox.xmin && x <= bbox.xmax && y >= bbox.ymin && y <= bbox.ymax ? 1 : 0;
@@ -269,12 +320,45 @@ function buildGridSampleTensor() {
     }
 }
 
+function runWarmupTraining() {
+    const temp = new SmallMLP(CONFIG.hiddenSize);
+    for (let step = 0; step < CONFIG.warmupSteps; step++) {
+        sampleBatch();
+        temp.trainStep(batchInputs, batchLabels, CONFIG.warmupLr);
+    }
+    return snapshotFromMLP(temp);
+}
+
+function ensureWarmBaseline() {
+    const key = bboxToKey();
+    if (warmupBaselineSnapshot && warmBaselineBboxKey === key) {
+        return;
+    }
+    warmupBaselineSnapshot = runWarmupTraining();
+    warmBaselineBboxKey = key;
+}
+
 function initNetwork() {
-    mlp = new SmallMLP(CONFIG.hiddenSize);
     allocBatch();
+    ensureWarmBaseline();
+    mlp = SmallMLP.fromSnapshot(warmupBaselineSnapshot, CONFIG.initNoiseStd);
     buildGridSampleTensor();
-    lossHistory = [];
+    lossRawRing.length = 0;
+    smoothedPlotHistory.length = 0;
     epoch = 0;
+}
+
+function rollingAverage() {
+    const n = lossRawRing.length;
+    if (n === 0) {
+        return 0;
+    }
+    const w = Math.min(CONFIG.rollWindow, n);
+    let s = 0;
+    for (let i = n - w; i < n; i++) {
+        s += lossRawRing[i];
+    }
+    return s / w;
 }
 
 function normToCanvasX(nx) {
@@ -329,7 +413,7 @@ function drawLoss() {
     const h = lossCanvas.height;
     lossCtx.clearRect(0, 0, w, h);
 
-    if (lossHistory.length < 2) {
+    if (smoothedPlotHistory.length < 2) {
         return;
     }
 
@@ -337,12 +421,12 @@ function drawLoss() {
     lossCtx.strokeStyle = '#D2691E';
     lossCtx.lineWidth = 2;
 
-    const maxLoss = Math.max(...lossHistory, 0.01);
+    const maxLoss = Math.max(...smoothedPlotHistory, 0.02);
     const minLoss = 0;
 
-    for (let i = 0; i < lossHistory.length; i++) {
-        const x = (i / (lossHistory.length - 1)) * w;
-        const y = h - ((lossHistory[i] - minLoss) / (maxLoss - minLoss)) * (h * 0.8) - 10;
+    for (let i = 0; i < smoothedPlotHistory.length; i++) {
+        const x = (i / (smoothedPlotHistory.length - 1)) * w;
+        const y = h - ((smoothedPlotHistory[i] - minLoss) / (maxLoss - minLoss)) * (h * 0.8) - 10;
         if (i === 0) {
             lossCtx.moveTo(x, y);
         } else {
@@ -350,6 +434,70 @@ function drawLoss() {
         }
     }
     lossCtx.stroke();
+}
+
+function tensorStats(arr) {
+    let minV = arr[0];
+    let maxV = arr[0];
+    let sum = 0;
+    for (let i = 0; i < arr.length; i++) {
+        const v = arr[i];
+        if (v < minV) {
+            minV = v;
+        }
+        if (v > maxV) {
+            maxV = v;
+        }
+        sum += v;
+    }
+    return { minV, maxV, mean: sum / arr.length };
+}
+
+function fmt(v) {
+    return v.toFixed(4);
+}
+
+function refreshExploreWeights() {
+    const el = document.getElementById('explore-weights');
+    if (!el || !mlp) {
+        return;
+    }
+    const H = mlp.hiddenSize;
+    const w1 = mlp.W1.data;
+    const b1 = mlp.b1.data;
+    const w2 = mlp.W2.data;
+
+    const hs = [];
+    for (let j = 0; j < H; j++) {
+        hs.push(`h${j}`);
+    }
+
+    let w1Rows = `<tr><th></th>${hs.map((h) => `<th>${h}</th>`).join('')}</tr>`;
+    w1Rows += `<tr><th>x</th>${Array.from({ length: H }, (_, j) => `<td>${fmt(w1[j])}</td>`).join('')}</tr>`;
+    w1Rows += `<tr><th>y</th>${Array.from({ length: H }, (_, j) => `<td>${fmt(w1[H + j])}</td>`).join('')}</tr>`;
+
+    const b1Header = `<tr>${Array.from({ length: H }, (_, j) => `<th>h${j}</th>`).join('')}</tr>`;
+    const b1Row = `<tr>${Array.from({ length: H }, (_, j) => `<td>${fmt(b1[j])}</td>`).join('')}</tr>`;
+    const w2Cells = Array.from({ length: H }, (_, j) => `<tr><th>h${j} &rarr; logit</th><td>${fmt(w2[j])}</td></tr>`).join('');
+
+    const s1 = tensorStats(w1);
+    const s2 = tensorStats(w2);
+    const sb1 = tensorStats(b1);
+
+    el.innerHTML = `
+        <div class="explore-weight-summary">
+            <div><strong>W1</strong> min ${fmt(s1.minV)}, max ${fmt(s1.maxV)}, mean ${fmt(s1.mean)}</div>
+            <div><strong>b1</strong> min ${fmt(sb1.minV)}, max ${fmt(sb1.maxV)}, mean ${fmt(sb1.mean)}</div>
+            <div><strong>W2</strong> min ${fmt(s2.minV)}, max ${fmt(s2.maxV)}, mean ${fmt(s2.mean)}</div>
+            <div><strong>b2 (logit bias)</strong> ${fmt(mlp.b2.data[0])}</div>
+        </div>
+        <p class="explore-table-label">W1 (rows = inputs x, y)</p>
+        <table class="explore-weight-table">${w1Rows}</table>
+        <p class="explore-table-label">b1 (per hidden unit)</p>
+        <table class="explore-weight-table">${b1Header}${b1Row}</table>
+        <p class="explore-table-label">W2 (hidden to logit)</p>
+        <table class="explore-weight-table">${w2Cells}</table>
+    `;
 }
 
 function drawNetworkViz() {
@@ -465,7 +613,7 @@ function refreshExploreText() {
     if (!archEl || !mlp) {
         return;
     }
-    archEl.textContent = `Architecture: 2 inputs (x, y in [-1,1]) -> ${mlp.hiddenSize} ReLU units -> 1 logit. Sigmoid gives estimated probability the point lies inside the dashed box (tight bbox of rasterized "hi"). Line thickness and color show weight sign and magnitude.`;
+    archEl.textContent = `Architecture: 2 inputs -> ${mlp.hiddenSize} ReLU -> 1 logit (batch ${CONFIG.batchSize}). A long offline warmup fits the bbox task; Retrain copies those weights with small Gaussian noise so the heatmap snaps back quickly. Chart = rolling mean BCE over the last ${CONFIG.rollWindow} optimizer steps.`;
 }
 
 function animate() {
@@ -474,26 +622,36 @@ function animate() {
         return;
     }
 
-    let lastLoss = 0;
+    let lastStepLoss = 0;
     for (let s = 0; s < CONFIG.trainStepsPerFrame; s++) {
         sampleBatch();
-        lastLoss = mlp.trainStep(batchInputs, batchLabels, CONFIG.learningRate);
+        lastStepLoss = mlp.trainStep(batchInputs, batchLabels, CONFIG.learningRate);
         epoch++;
+        lossRawRing.push(lastStepLoss);
+        if (lossRawRing.length > CONFIG.rawLossCap) {
+            lossRawRing.shift();
+        }
     }
 
-    lossHistory.push(lastLoss);
-    if (lossHistory.length > 200) {
-        lossHistory.shift();
+    const roll = rollingAverage();
+    smoothedPlotHistory.push(roll);
+    if (smoothedPlotHistory.length > CONFIG.plotPoints) {
+        smoothedPlotHistory.shift();
     }
 
     document.getElementById('epoch-counter').innerText = epoch;
-    document.getElementById('loss-value').innerText = lastLoss.toFixed(4);
+    document.getElementById('loss-value').innerText = roll.toFixed(4);
+    const instEl = document.getElementById('loss-instant');
+    if (instEl) {
+        instEl.textContent = lastStepLoss.toFixed(4);
+    }
 
     drawMainCanvas();
     drawLoss();
 
     if (exploreModalOpen) {
         drawNetworkViz();
+        refreshExploreWeights();
     }
 
     requestAnimationFrame(animate);
@@ -510,6 +668,7 @@ function setExploreOpen(open) {
     if (open && mlp) {
         refreshExploreText();
         drawNetworkViz();
+        refreshExploreWeights();
     }
 }
 

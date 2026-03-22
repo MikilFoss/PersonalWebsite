@@ -21,6 +21,7 @@
             <p class="explore-modal-intro">The hero trains a tiny classifier: given coordinates (x, y) in the square [&minus;1, 1]&sup2;, it predicts whether that point lies inside the axis-aligned bounding box of rasterized &ldquo;hi&rdquo;. Training uses random samples and binary cross-entropy (sigmoid on the logit). The dashed rectangle is the ground-truth box.</p>
             <canvas id="nn-viz-canvas" class="explore-nn-viz" width="440" height="280" aria-label="Network graph"></canvas>
             <p id="explore-arch" class="explore-arch"></p>
+            <div id="explore-weights" class="explore-weights"></div>
         </div>
     </div>
 
@@ -33,11 +34,12 @@
                 </div>
             </div>
             <div class="loss-graph-container">
-                <h3>Loss (BCE)</h3>
+                <h3>Loss (BCE, rolling)</h3>
                 <canvas id="loss-canvas"></canvas>
-                <div class="stats">
-                    <span>Epoch: <span id="epoch-counter">0</span></span>
-                    <span>Loss: <span id="loss-value">0.000</span></span>
+                <div class="stats stats-hero">
+                    <span>Steps: <span id="epoch-counter">0</span></span>
+                    <span>Avg: <span id="loss-value">0.000</span></span>
+                    <span>Last: <span id="loss-instant">0.000</span></span>
                 </div>
                 <div class="hero-btn-row">
                     <button type="button" id="retrain-btn" class="btn-small"><i class="fas fa-sync-alt"></i> Retrain</button>
