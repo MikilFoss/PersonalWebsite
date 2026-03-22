@@ -18,9 +18,9 @@
         <div class="explore-modal-panel" role="dialog" aria-labelledby="explore-modal-title">
             <button type="button" class="explore-modal-close" aria-label="Close">&times;</button>
             <h3 id="explore-modal-title">Explore the network</h3>
-            <p class="explore-modal-intro">This hero trains a small MLP in your browser: each point is one row of the batch. Targets are pixels of the word &ldquo;hi&rdquo; in a fixed order; loss is mean squared error between each output coordinate and its paired target.</p>
+            <p class="explore-modal-intro">The hero trains a tiny classifier: given coordinates (x, y) in the square [&minus;1, 1]&sup2;, it predicts whether that point lies inside the axis-aligned bounding box of rasterized &ldquo;hi&rdquo;. Training uses random samples and binary cross-entropy (sigmoid on the logit). The dashed rectangle is the ground-truth box.</p>
+            <canvas id="nn-viz-canvas" class="explore-nn-viz" width="440" height="280" aria-label="Network graph"></canvas>
             <p id="explore-arch" class="explore-arch"></p>
-            <div id="explore-stats" class="explore-stats"></div>
         </div>
     </div>
 
@@ -33,7 +33,7 @@
                 </div>
             </div>
             <div class="loss-graph-container">
-                <h3>Training Loss</h3>
+                <h3>Loss (BCE)</h3>
                 <canvas id="loss-canvas"></canvas>
                 <div class="stats">
                     <span>Epoch: <span id="epoch-counter">0</span></span>

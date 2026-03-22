@@ -1,25 +1,31 @@
 /**
- * Neural Network Visualization
- * MLP with 1:1 supervised MSE: fixed noise inputs map to paired targets forming "hi".
+ * Hero: small MLP classifies 2D points as inside/outside the axis-aligned
+ * bounding box of rasterized "hi". Explore draws the network graph.
  */
 
 const CONFIG = {
-    maxParticles: 800,
-    learningRate: 0.08,
-    hiddenSize: 64,
     targetText: "hi",
-    font: "bold 140px Outfit, sans-serif"
+    font: "bold 140px Outfit, sans-serif",
+    hiddenSize: 8,
+    learningRate: 0.35,
+    batchSize: 384,
+    trainStepsPerFrame: 12,
+    gridCols: 52,
+    gridRows: 32
 };
 
 const MathUtils = {
-    random: (min, max) => Math.random() * (max - min) + min,
-    randomGaussian: () => {
-        let u = 0, v = 0;
-        while (u === 0) u = Math.random();
-        while (v === 0) v = Math.random();
-        return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
-    }
+    random: (min, max) => Math.random() * (max - min) + min
 };
+
+function sigmoid(x) {
+    if (x >= 0) {
+        const t = Math.exp(-x);
+        return 1 / (1 + t);
+    }
+    const t = Math.exp(x);
+    return t / (1 + t);
+}
 
 class Tensor {
     constructor(rows, cols, data = null) {
@@ -31,7 +37,7 @@ class Tensor {
     static random(rows, cols, scale = 1.0) {
         const t = new Tensor(rows, cols);
         for (let i = 0; i < t.data.length; i++) {
-            t.data[i] = MathUtils.randomGaussian() * scale;
+            t.data[i] = (Math.random() * 2 - 1) * scale;
         }
         return t;
     }
@@ -41,169 +47,94 @@ class Tensor {
     }
 }
 
-class MLP {
-    constructor(inputSize, hiddenSize, outputSize) {
-        this.inputSize = inputSize;
+/** 2 -> hidden (ReLU) -> 1 logit (BCE with sigmoid) */
+class SmallMLP {
+    constructor(hiddenSize) {
+        this.inputSize = 2;
         this.hiddenSize = hiddenSize;
-        this.outputSize = outputSize;
 
-        this.W1 = Tensor.random(inputSize, hiddenSize, Math.sqrt(2 / inputSize));
+        this.W1 = Tensor.random(2, hiddenSize, Math.sqrt(2 / 2));
         this.b1 = Tensor.zeros(1, hiddenSize);
-
-        this.W2 = Tensor.random(hiddenSize, hiddenSize, Math.sqrt(2 / hiddenSize));
-        this.b2 = Tensor.zeros(1, hiddenSize);
-
-        this.W3 = Tensor.random(hiddenSize, outputSize, Math.sqrt(2 / hiddenSize));
-        this.b3 = Tensor.zeros(1, outputSize);
+        this.W2 = Tensor.random(hiddenSize, 1, Math.sqrt(2 / hiddenSize));
+        this.b2 = Tensor.zeros(1, 1);
     }
 
     forward(inputs) {
         this.inputs = inputs;
         const batchSize = inputs.rows;
+        const H = this.hiddenSize;
 
-        this.z1 = new Tensor(batchSize, this.W1.cols);
+        this.pre1 = new Tensor(batchSize, H);
+        this.h1 = new Tensor(batchSize, H);
         for (let i = 0; i < batchSize; i++) {
-            for (let j = 0; j < this.W1.cols; j++) {
+            for (let j = 0; j < H; j++) {
                 let sum = this.b1.data[j];
-                for (let k = 0; k < this.W1.rows; k++) {
-                    sum += inputs.data[i * inputs.cols + k] * this.W1.data[k * this.W1.cols + j];
-                }
-                this.z1.data[i * this.z1.cols + j] = sum > 0 ? sum : 0;
+                sum += inputs.data[i * 2] * this.W1.data[0 * H + j];
+                sum += inputs.data[i * 2 + 1] * this.W1.data[1 * H + j];
+                this.pre1.data[i * H + j] = sum;
+                this.h1.data[i * H + j] = sum > 0 ? sum : 0;
             }
         }
 
-        this.z2 = new Tensor(batchSize, this.W2.cols);
+        this.logits = new Tensor(batchSize, 1);
         for (let i = 0; i < batchSize; i++) {
-            for (let j = 0; j < this.W2.cols; j++) {
-                let sum = this.b2.data[j];
-                for (let k = 0; k < this.W2.rows; k++) {
-                    sum += this.z1.data[i * this.z1.cols + k] * this.W2.data[k * this.W2.cols + j];
-                }
-                this.z2.data[i * this.z2.cols + j] = sum > 0 ? sum : 0;
+            let sum = this.b2.data[0];
+            for (let j = 0; j < H; j++) {
+                sum += this.h1.data[i * H + j] * this.W2.data[j];
             }
+            this.logits.data[i] = sum;
         }
 
-        this.output = new Tensor(batchSize, this.W3.cols);
-        for (let i = 0; i < batchSize; i++) {
-            for (let j = 0; j < this.W3.cols; j++) {
-                let sum = this.b3.data[j];
-                for (let k = 0; k < this.W3.rows; k++) {
-                    sum += this.z2.data[i * this.z2.cols + k] * this.W3.data[k * this.W3.cols + j];
-                }
-                this.output.data[i * this.output.cols + j] = sum;
-            }
-        }
-
-        return this.output;
+        return this.logits;
     }
 
-    /**
-     * Mean MSE: (1/N) sum_i 0.5 * ||out_i - t_i||^2
-     */
-    trainStep(inputs, targets, lr) {
+    trainStep(inputs, labels, lr) {
         this.forward(inputs);
-        const batchSize = this.output.rows;
-        const outputDim = this.output.cols;
-
-        if (!targets || targets.length !== batchSize) {
-            return 0;
-        }
+        const batchSize = inputs.rows;
+        const H = this.hiddenSize;
 
         let totalLoss = 0;
-        const dLoss_dOut = new Tensor(batchSize, outputDim);
+        const dLogit = new Tensor(batchSize, 1);
 
         for (let i = 0; i < batchSize; i++) {
-            const ox = this.output.data[i * 2];
-            const oy = this.output.data[i * 2 + 1];
-            const tx = targets[i].x;
-            const ty = targets[i].y;
-            const ex = ox - tx;
-            const ey = oy - ty;
-            totalLoss += 0.5 * (ex * ex + ey * ey);
-            dLoss_dOut.data[i * 2] = ex / batchSize;
-            dLoss_dOut.data[i * 2 + 1] = ey / batchSize;
+            const z = this.logits.data[i];
+            const s = sigmoid(z);
+            const y = labels[i];
+            totalLoss += -(y * Math.log(s + 1e-7) + (1 - y) * Math.log(1 - s + 1e-7));
+            dLogit.data[i] = (s - y) / batchSize;
         }
         totalLoss /= batchSize;
 
-        const dZ2 = new Tensor(batchSize, this.W2.cols);
+        const dH1 = new Tensor(batchSize, H);
         for (let i = 0; i < batchSize; i++) {
-            for (let j = 0; j < this.W2.cols; j++) {
-                let sum = 0;
-                for (let k = 0; k < outputDim; k++) {
-                    sum += dLoss_dOut.data[i * outputDim + k] * this.W3.data[j * this.W3.cols + k];
-                }
-                dZ2.data[i * this.W2.cols + j] = (this.z2.data[i * this.W2.cols + j] > 0) ? sum : 0;
+            for (let j = 0; j < H; j++) {
+                const chain = dLogit.data[i] * this.W2.data[j];
+                const pre = this.pre1.data[i * H + j];
+                dH1.data[i * H + j] = pre > 0 ? chain : 0;
             }
         }
 
         for (let i = 0; i < batchSize; i++) {
-            for (let j = 0; j < this.W3.rows; j++) {
-                for (let k = 0; k < this.W3.cols; k++) {
-                    this.W3.data[j * this.W3.cols + k] -= lr * this.z2.data[i * this.z2.cols + j] * dLoss_dOut.data[i * outputDim + k] / batchSize;
-                }
+            for (let j = 0; j < H; j++) {
+                this.W2.data[j] -= lr * this.h1.data[i * H + j] * dLogit.data[i] / batchSize;
             }
-            for (let k = 0; k < this.b3.cols; k++) {
-                this.b3.data[k] -= lr * dLoss_dOut.data[i * outputDim + k] / batchSize;
-            }
-        }
-
-        const dZ1 = new Tensor(batchSize, this.W1.cols);
-        for (let i = 0; i < batchSize; i++) {
-            for (let j = 0; j < this.W1.cols; j++) {
-                let sum = 0;
-                for (let k = 0; k < this.W2.cols; k++) {
-                    sum += dZ2.data[i * this.W2.cols + k] * this.W2.data[j * this.W2.cols + k];
-                }
-                dZ1.data[i * this.W1.cols + j] = (this.z1.data[i * this.W1.cols + j] > 0) ? sum : 0;
-            }
+            this.b2.data[0] -= lr * dLogit.data[i] / batchSize;
         }
 
         for (let i = 0; i < batchSize; i++) {
-            for (let j = 0; j < this.W2.rows; j++) {
-                for (let k = 0; k < this.W2.cols; k++) {
-                    this.W2.data[j * this.W2.cols + k] -= lr * this.z1.data[i * this.z1.cols + j] * dZ2.data[i * this.W2.cols + k] / batchSize;
+            for (let j = 0; j < H; j++) {
+                for (let k = 0; k < 2; k++) {
+                    const inVal = inputs.data[i * 2 + k];
+                    this.W1.data[k * H + j] -= lr * inVal * dH1.data[i * H + j] / batchSize;
                 }
             }
-            for (let k = 0; k < this.b2.cols; k++) {
-                this.b2.data[k] -= lr * dZ2.data[i * this.W2.cols + k] / batchSize;
-            }
-        }
-
-        for (let i = 0; i < batchSize; i++) {
-            for (let j = 0; j < this.W1.rows; j++) {
-                for (let k = 0; k < this.W1.cols; k++) {
-                    this.W1.data[j * this.W1.cols + k] -= lr * this.inputs.data[i * this.inputs.cols + j] * dZ1.data[i * this.W1.cols + k] / batchSize;
-                }
-            }
-            for (let k = 0; k < this.b1.cols; k++) {
-                this.b1.data[k] -= lr * dZ1.data[i * this.W1.cols + k] / batchSize;
+            for (let j = 0; j < H; j++) {
+                this.b1.data[j] -= lr * dH1.data[i * H + j] / batchSize;
             }
         }
 
         return totalLoss;
     }
-}
-
-function frobNorm2D(tensor) {
-    let s = 0;
-    for (let i = 0; i < tensor.data.length; i++) {
-        s += tensor.data[i] * tensor.data[i];
-    }
-    return Math.sqrt(s);
-}
-
-function tensorMinMaxMean(tensor) {
-    let minV = tensor.data[0];
-    let maxV = tensor.data[0];
-    let sum = 0;
-    for (let i = 0; i < tensor.data.length; i++) {
-        const v = tensor.data[i];
-        if (v < minV) minV = v;
-        if (v > maxV) maxV = v;
-        sum += v;
-    }
-    const mean = sum / tensor.data.length;
-    return { minV, maxV, mean };
 }
 
 const canvas = document.getElementById('nn-canvas');
@@ -212,11 +143,19 @@ const lossCanvas = document.getElementById('loss-canvas');
 const lossCtx = lossCanvas.getContext('2d');
 
 let mlp;
-let fixedInput;
-let targetPoints = [];
+let batchInputs;
+let batchLabels;
 let lossHistory = [];
 let epoch = 0;
-let particleCount = 0;
+let exploreModalOpen = false;
+let gridSampleInput = null;
+
+/** normalized [-1,1] axis-aligned box around "hi" */
+let bbox = { xmin: -0.5, xmax: 0.5, ymin: -0.5, ymax: 0.5 };
+
+function insideBbox(x, y) {
+    return x >= bbox.xmin && x <= bbox.xmax && y >= bbox.ymin && y <= bbox.ymax ? 1 : 0;
+}
 
 function resize() {
     const container = canvas.parentElement;
@@ -231,31 +170,16 @@ function resize() {
     lossCanvas.width = panel.clientWidth - 30;
     lossCanvas.height = Math.max(90, panel.clientHeight - used);
 
-    initTargets();
+    computeBboxFromText();
+    initNetwork();
 }
 
 window.addEventListener('resize', resize);
 
-function subsampleEvenly(sorted, maxN) {
-    if (sorted.length <= maxN) {
-        return sorted;
-    }
-    if (maxN <= 1) {
-        return [sorted[0]];
-    }
-    const out = [];
-    const step = (sorted.length - 1) / (maxN - 1);
-    for (let i = 0; i < maxN; i++) {
-        const idx = Math.round(i * step);
-        out.push(sorted[Math.min(idx, sorted.length - 1)]);
-    }
-    return out;
-}
-
-function initTargets() {
+function computeBboxFromText() {
     const osc = document.createElement('canvas');
-    osc.width = canvas.width;
-    osc.height = canvas.height;
+    osc.width = Math.max(1, canvas.width);
+    osc.height = Math.max(1, canvas.height);
     const osctx = osc.getContext('2d');
 
     osctx.font = CONFIG.font;
@@ -267,55 +191,137 @@ function initTargets() {
     const imgData = osctx.getImageData(0, 0, osc.width, osc.height);
     const data = imgData.data;
 
-    const raw = [];
-    for (let y = 0; y < osc.height; y += 2) {
-        for (let x = 0; x < osc.width; x += 2) {
+    let minPxX = osc.width;
+    let minPxY = osc.height;
+    let maxPxX = 0;
+    let maxPxY = 0;
+    let any = false;
+
+    for (let y = 0; y < osc.height; y++) {
+        for (let x = 0; x < osc.width; x++) {
             if (data[(y * osc.width + x) * 4 + 3] > 128) {
-                raw.push({
-                    x: (x / osc.width) * 2 - 1,
-                    y: (y / osc.height) * 2 - 1
-                });
+                any = true;
+                if (x < minPxX) {
+                    minPxX = x;
+                }
+                if (x > maxPxX) {
+                    maxPxX = x;
+                }
+                if (y < minPxY) {
+                    minPxY = y;
+                }
+                if (y > maxPxY) {
+                    maxPxY = y;
+                }
             }
         }
     }
 
-    raw.sort((a, b) => (a.y !== b.y ? a.y - b.y : a.x - b.x));
-    targetPoints = subsampleEvenly(raw, CONFIG.maxParticles);
-
-    if (targetPoints.length === 0) {
-        for (let i = 0; i < 200; i++) {
-            const angle = (i / 200) * Math.PI * 2;
-            targetPoints.push({
-                x: Math.cos(angle) * 0.5,
-                y: Math.sin(angle) * 0.5
-            });
-        }
-    }
-
-    particleCount = targetPoints.length;
-    initNetwork();
-}
-
-function initNetwork() {
-    const inputSize = 4;
-    const n = particleCount || targetPoints.length;
-    if (n === 0) {
+    if (!any) {
+        bbox = { xmin: -0.3, xmax: 0.3, ymin: -0.3, ymax: 0.3 };
         return;
     }
 
-    fixedInput = new Tensor(n, inputSize);
+    const padX = Math.max(2, (maxPxX - minPxX) * 0.04);
+    const padY = Math.max(2, (maxPxY - minPxY) * 0.04);
+    minPxX = Math.max(0, minPxX - padX);
+    maxPxX = Math.min(osc.width - 1, maxPxX + padX);
+    minPxY = Math.max(0, minPxY - padY);
+    maxPxY = Math.min(osc.height - 1, maxPxY + padY);
+
+    bbox = {
+        xmin: (minPxX / osc.width) * 2 - 1,
+        xmax: (maxPxX / osc.width) * 2 - 1,
+        ymin: (minPxY / osc.height) * 2 - 1,
+        ymax: (maxPxY / osc.height) * 2 - 1
+    };
+}
+
+function allocBatch() {
+    const n = CONFIG.batchSize;
+    batchInputs = new Tensor(n, 2);
+    batchLabels = new Float32Array(n);
+}
+
+function sampleBatch() {
+    const n = CONFIG.batchSize;
     for (let i = 0; i < n; i++) {
         const x = MathUtils.random(-1, 1);
         const y = MathUtils.random(-1, 1);
-        fixedInput.data[i * 4] = x;
-        fixedInput.data[i * 4 + 1] = y;
-        fixedInput.data[i * 4 + 2] = Math.sqrt(x * x + y * y);
-        fixedInput.data[i * 4 + 3] = Math.atan2(y, x);
+        batchInputs.data[i * 2] = x;
+        batchInputs.data[i * 2 + 1] = y;
+        batchLabels[i] = insideBbox(x, y);
     }
+}
 
-    mlp = new MLP(inputSize, CONFIG.hiddenSize, 2);
+function buildGridSampleTensor() {
+    const cols = CONFIG.gridCols;
+    const rows = CONFIG.gridRows;
+    const n = cols * rows;
+    gridSampleInput = new Tensor(n, 2);
+    let idx = 0;
+    for (let gy = 0; gy < rows; gy++) {
+        for (let gx = 0; gx < cols; gx++) {
+            gridSampleInput.data[idx * 2] = ((gx + 0.5) / cols) * 2 - 1;
+            gridSampleInput.data[idx * 2 + 1] = ((gy + 0.5) / rows) * 2 - 1;
+            idx++;
+        }
+    }
+}
+
+function initNetwork() {
+    mlp = new SmallMLP(CONFIG.hiddenSize);
+    allocBatch();
+    buildGridSampleTensor();
     lossHistory = [];
     epoch = 0;
+}
+
+function normToCanvasX(nx) {
+    return (nx + 1) / 2 * canvas.width;
+}
+
+function normToCanvasY(ny) {
+    return (ny + 1) / 2 * canvas.height;
+}
+
+function drawMainCanvas() {
+    ctx.fillStyle = '#fafafa';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const cols = CONFIG.gridCols;
+    const rows = CONFIG.gridRows;
+    const cellW = canvas.width / cols;
+    const cellH = canvas.height / rows;
+
+    if (gridSampleInput && gridSampleInput.rows === cols * rows) {
+        mlp.forward(gridSampleInput);
+    }
+
+    let idx = 0;
+    for (let gy = 0; gy < rows; gy++) {
+        for (let gx = 0; gx < cols; gx++) {
+            const p = gridSampleInput ? sigmoid(mlp.logits.data[idx]) : 0;
+            idx++;
+            const t = Math.floor(40 + p * 180);
+            ctx.fillStyle = `rgb(${255 - t},${200 - Math.floor(p * 80)},${180 - Math.floor(p * 100)})`;
+            ctx.fillRect(gx * cellW, gy * cellH, cellW + 0.5, cellH + 0.5);
+        }
+    }
+
+    const x0 = normToCanvasX(bbox.xmin);
+    const x1 = normToCanvasX(bbox.xmax);
+    const y0 = normToCanvasY(bbox.ymin);
+    const y1 = normToCanvasY(bbox.ymax);
+    ctx.strokeStyle = '#2c2c2c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
+    ctx.setLineDash([]);
+
+    ctx.strokeStyle = 'rgba(210, 105, 30, 0.85)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
 }
 
 function drawLoss() {
@@ -331,12 +337,12 @@ function drawLoss() {
     lossCtx.strokeStyle = '#D2691E';
     lossCtx.lineWidth = 2;
 
-    const maxLoss = Math.max(...lossHistory);
+    const maxLoss = Math.max(...lossHistory, 0.01);
     const minLoss = 0;
 
     for (let i = 0; i < lossHistory.length; i++) {
         const x = (i / (lossHistory.length - 1)) * w;
-        const y = h - ((lossHistory[i] - minLoss) / (maxLoss - minLoss || 1)) * (h * 0.8) - 10;
+        const y = h - ((lossHistory[i] - minLoss) / (maxLoss - minLoss)) * (h * 0.8) - 10;
         if (i === 0) {
             lossCtx.moveTo(x, y);
         } else {
@@ -346,66 +352,151 @@ function drawLoss() {
     lossCtx.stroke();
 }
 
+function drawNetworkViz() {
+    const viz = document.getElementById('nn-viz-canvas');
+    if (!viz || !mlp) {
+        return;
+    }
+    const vctx = viz.getContext('2d');
+    const W = viz.width;
+    const H = viz.height;
+    vctx.clearRect(0, 0, W, H);
+    vctx.fillStyle = '#fffef8';
+    vctx.fillRect(0, 0, W, H);
+
+    const xIn = 55;
+    const xH = W / 2;
+    const xOut = W - 55;
+    const inCount = 2;
+    const hCount = mlp.hiddenSize;
+
+    function yFor(idx, total) {
+        return (H / (total + 1)) * (idx + 1);
+    }
+
+    const inPos = [];
+    const hidPos = [];
+    for (let i = 0; i < inCount; i++) {
+        inPos.push({ x: xIn, y: yFor(i, inCount) });
+    }
+    for (let j = 0; j < hCount; j++) {
+        hidPos.push({ x: xH, y: yFor(j, hCount) });
+    }
+    const outPos = { x: xOut, y: H / 2 };
+
+    const maxW = 2.5;
+    function lineForWeight(wv) {
+        const a = Math.min(1, Math.abs(wv) * 0.8);
+        return { w: 0.4 + a * maxW, neg: wv < 0 };
+    }
+
+    for (let k = 0; k < inCount; k++) {
+        for (let j = 0; j < hCount; j++) {
+            const wv = mlp.W1.data[k * hCount + j];
+            const { w, neg } = lineForWeight(wv);
+            vctx.beginPath();
+            vctx.strokeStyle = neg ? 'rgba(85,107,47,0.45)' : 'rgba(210,105,30,0.5)';
+            vctx.lineWidth = w;
+            vctx.moveTo(inPos[k].x, inPos[k].y);
+            vctx.lineTo(hidPos[j].x, hidPos[j].y);
+            vctx.stroke();
+        }
+    }
+
+    for (let j = 0; j < hCount; j++) {
+        const wv = mlp.W2.data[j];
+        const { w, neg } = lineForWeight(wv);
+        vctx.beginPath();
+        vctx.strokeStyle = neg ? 'rgba(85,107,47,0.5)' : 'rgba(210,105,30,0.55)';
+        vctx.lineWidth = w;
+        vctx.moveTo(hidPos[j].x, hidPos[j].y);
+        vctx.lineTo(outPos.x, outPos.y);
+        vctx.stroke();
+    }
+
+    const nodeR = 9;
+    vctx.font = '11px Outfit, sans-serif';
+    vctx.textAlign = 'center';
+
+    for (let k = 0; k < inCount; k++) {
+        vctx.beginPath();
+        vctx.fillStyle = '#e8dcc8';
+        vctx.strokeStyle = '#8B4513';
+        vctx.lineWidth = 1.5;
+        vctx.arc(inPos[k].x, inPos[k].y, nodeR, 0, Math.PI * 2);
+        vctx.fill();
+        vctx.stroke();
+        vctx.fillStyle = '#333';
+        vctx.fillText(k === 0 ? 'x' : 'y', inPos[k].x, inPos[k].y + 4);
+    }
+
+    for (let j = 0; j < hCount; j++) {
+        vctx.beginPath();
+        vctx.fillStyle = '#f5ebe0';
+        vctx.strokeStyle = '#556B2F';
+        vctx.lineWidth = 1.5;
+        vctx.arc(hidPos[j].x, hidPos[j].y, nodeR, 0, Math.PI * 2);
+        vctx.fill();
+        vctx.stroke();
+    }
+
+    vctx.beginPath();
+    vctx.fillStyle = '#fdebd0';
+    vctx.strokeStyle = '#D2691E';
+    vctx.lineWidth = 2;
+    vctx.arc(outPos.x, outPos.y, nodeR + 2, 0, Math.PI * 2);
+    vctx.fill();
+    vctx.stroke();
+    vctx.fillStyle = '#333';
+    vctx.fillText('p', outPos.x, outPos.y + 4);
+
+    vctx.textAlign = 'left';
+    vctx.fillStyle = '#555';
+    vctx.font = '10px Outfit, sans-serif';
+    vctx.fillText('Input (2D point)', 8, 16);
+    vctx.textAlign = 'center';
+    vctx.fillText(`Hidden (${hCount}, ReLU)`, xH, 16);
+    vctx.textAlign = 'right';
+    vctx.fillText('Logit (BCE)', W - 8, 16);
+}
+
+function refreshExploreText() {
+    const archEl = document.getElementById('explore-arch');
+    if (!archEl || !mlp) {
+        return;
+    }
+    archEl.textContent = `Architecture: 2 inputs (x, y in [-1,1]) -> ${mlp.hiddenSize} ReLU units -> 1 logit. Sigmoid gives estimated probability the point lies inside the dashed box (tight bbox of rasterized "hi"). Line thickness and color show weight sign and magnitude.`;
+}
+
 function animate() {
-    if (!mlp || !fixedInput || targetPoints.length === 0) {
-        animationId = requestAnimationFrame(animate);
+    if (!mlp || !batchInputs) {
+        requestAnimationFrame(animate);
         return;
     }
 
-    const loss = mlp.trainStep(fixedInput, targetPoints, CONFIG.learningRate);
-    lossHistory.push(loss);
+    let lastLoss = 0;
+    for (let s = 0; s < CONFIG.trainStepsPerFrame; s++) {
+        sampleBatch();
+        lastLoss = mlp.trainStep(batchInputs, batchLabels, CONFIG.learningRate);
+        epoch++;
+    }
+
+    lossHistory.push(lastLoss);
     if (lossHistory.length > 200) {
         lossHistory.shift();
     }
 
-    epoch++;
     document.getElementById('epoch-counter').innerText = epoch;
-    document.getElementById('loss-value').innerText = loss.toFixed(4);
+    document.getElementById('loss-value').innerText = lastLoss.toFixed(4);
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const output = mlp.output;
-    ctx.fillStyle = '#D2691E';
-
-    for (let i = 0; i < output.rows; i++) {
-        const x = (output.data[i * 2] + 1) / 2 * canvas.width;
-        const y = (output.data[i * 2 + 1] + 1) / 2 * canvas.height;
-
-        ctx.beginPath();
-        ctx.arc(x, y, 2, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
+    drawMainCanvas();
     drawLoss();
 
-    animationId = requestAnimationFrame(animate);
-}
-
-function refreshExplorePanel() {
-    const archEl = document.getElementById('explore-arch');
-    const statsEl = document.getElementById('explore-stats');
-    if (!archEl || !statsEl) {
-        return;
-    }
-    if (!mlp) {
-        archEl.textContent = 'Network not initialized yet.';
-        statsEl.innerHTML = '';
-        return;
+    if (exploreModalOpen) {
+        drawNetworkViz();
     }
 
-    const n = particleCount || (mlp.output ? mlp.output.rows : 0);
-    archEl.textContent = `Layers: ${mlp.inputSize} -> ${mlp.hiddenSize} (ReLU) -> ${mlp.hiddenSize} (ReLU) -> ${mlp.outputSize} (linear). One output row per point (${n} points). Each row gets the same fixed 4D noise vector for the whole run; Retrain resamples noise and reinitializes weights.`;
-
-    const w1 = frobNorm2D(mlp.W1);
-    const w2 = frobNorm2D(mlp.W2);
-    const w3 = frobNorm2D(mlp.W3);
-    const mm = tensorMinMaxMean(mlp.W1);
-    statsEl.innerHTML = [
-        `<div><strong>||W1||_F</strong> ${w1.toFixed(3)}</div>`,
-        `<div><strong>||W2||_F</strong> ${w2.toFixed(3)}</div>`,
-        `<div><strong>||W3||_F</strong> ${w3.toFixed(3)}</div>`,
-        `<div><strong>W1 weights</strong> min ${mm.minV.toFixed(3)}, max ${mm.maxV.toFixed(3)}, mean ${mm.mean.toFixed(3)}</div>`
-    ].join('');
+    requestAnimationFrame(animate);
 }
 
 function setExploreOpen(open) {
@@ -413,10 +504,12 @@ function setExploreOpen(open) {
     if (!modal) {
         return;
     }
+    exploreModalOpen = open;
     modal.hidden = !open;
     modal.setAttribute('aria-hidden', open ? 'false' : 'true');
     if (open && mlp) {
-        refreshExplorePanel();
+        refreshExploreText();
+        drawNetworkViz();
     }
 }
 
