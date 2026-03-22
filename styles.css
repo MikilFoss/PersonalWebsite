@@ -441,11 +441,41 @@ ul li::before {
     color: white;
 }
 
-/* Projects */
+/* Projects: only 4x1, 2x2, or 1x4 (never e.g. 3+1 from auto-fit) */
+.card.projects {
+    container-type: inline-size;
+    container-name: projects;
+}
+
 .project-buttons {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: 1fr;
     gap: 15px;
+}
+
+@container projects (min-width: 21rem) {
+    .project-buttons {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@container projects (min-width: 40rem) {
+    .project-buttons {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@supports not (container-type: inline-size) {
+    @media (min-width: 480px) {
+        .project-buttons {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    @media (min-width: 960px) {
+        .project-buttons {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
 }
 
 .project-btn {
