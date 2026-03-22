@@ -9,18 +9,26 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
-    <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 
 <body>
+    <div id="explore-modal" class="explore-modal" hidden aria-hidden="true">
+        <div class="explore-modal-backdrop" aria-hidden="true"></div>
+        <div class="explore-modal-panel" role="dialog" aria-labelledby="explore-modal-title">
+            <button type="button" class="explore-modal-close" aria-label="Close">&times;</button>
+            <h3 id="explore-modal-title">Explore the network</h3>
+            <p class="explore-modal-intro">This hero trains a small MLP in your browser: each point is one row of the batch. Targets are pixels of the word &ldquo;hi&rdquo; in a fixed order; loss is mean squared error between each output coordinate and its paired target.</p>
+            <p id="explore-arch" class="explore-arch"></p>
+            <div id="explore-stats" class="explore-stats"></div>
+        </div>
+    </div>
+
     <div class="main-container">
-        <!-- Hero / Neural Network Section -->
         <header class="hero-section">
             <div class="canvas-container">
                 <canvas id="nn-canvas"></canvas>
                 <div class="overlay-text" id="title-overlay">
-                    <!-- Text will be drawn by the NN, but we keep this for accessibility/fallback -->
                     <h1 class="sr-only">Mikil Radu Foss</h1>
                 </div>
             </div>
@@ -31,11 +39,13 @@
                     <span>Epoch: <span id="epoch-counter">0</span></span>
                     <span>Loss: <span id="loss-value">0.000</span></span>
                 </div>
-                <button id="retrain-btn" class="btn-small"><i class="fas fa-sync-alt"></i> Retrain</button>
+                <div class="hero-btn-row">
+                    <button type="button" id="retrain-btn" class="btn-small"><i class="fas fa-sync-alt"></i> Retrain</button>
+                    <button type="button" id="explore-btn" class="btn-small btn-secondary"><i class="fas fa-network-wired"></i> Explore</button>
+                </div>
             </div>
         </header>
 
-        <!-- Contact / Links -->
         <section class="links-bar">
             <a href="https://github.com/MikilFoss" target="_blank" class="icon-link"><i class="fab fa-github"></i>
                 GitHub</a>
@@ -44,10 +54,8 @@
                 MINE Paper</a>
         </section>
 
-        <!-- Content Grid -->
         <div class="content-grid">
 
-            <!-- Education -->
             <section class="card education">
                 <h2><i class="fas fa-graduation-cap"></i> Education</h2>
                 <div class="item">
@@ -62,7 +70,15 @@
                 </div>
             </section>
 
-            <!-- Research Highlights -->
+            <section class="card awards">
+                <h2><i class="fas fa-trophy"></i> Awards & Competitions</h2>
+                <ul>
+                    <li>UMN National Scholarship ($40,000)</li>
+                    <li>AWS DeepRacer ML (4 Top-10, 500&ndash;1000 monthly)</li>
+                    <li>UNL Math Day (Top 10 / 2000)</li>
+                </ul>
+            </section>
+
             <section class="card research">
                 <h2><i class="fas fa-flask"></i> Research Experience</h2>
 
@@ -113,7 +129,6 @@
                 </div>
             </section>
 
-            <!-- Experience -->
             <section class="card experience">
                 <h2><i class="fas fa-briefcase"></i> Experience</h2>
 
@@ -124,26 +139,29 @@
                     </div>
                     <p class="subtitle">12/24 - Present</p>
                     <ul>
-                        <li>Managed a team of 4 researchers and built an MCP server for the Godot game engine.</li>
-                        <li>Trained a custom coding agent with SOTA performance using GRPO to produce Godot games.</li>
-                        <li>Designed the Creevo Agent Library (CAL), an open-source framework supporting multimodal tool
-                            responses.</li>
-                        <li>Built scaling cloud infrastructure to provide agents with access to Docker containers
-                            running Godot.</li>
+                        <li>Platform that generates playable games from natural language descriptions.</li>
+                        <li>Built conversational agent pipeline with iterative clarification dialogue; developed Godot engine API wrapper with JSON-formatted responses optimized for LLM consumption.</li>
+                        <li>Trained custom Godot coding agent using GRPO with multi-signal grading (compilation, time, LLM-as-judge). Improved compile rate from 80% to 98% and reduced unplayable game rate from 8% to &lt;1%.</li>
+                        <li>Built Kubernetes cluster using Google&rsquo;s agent-sandbox (<code>kubernetes-sigs</code>) for secure multi-tenant agent execution.</li>
+                        <li>Led product research, built the product, and drove iterative improvement from customer feedback.</li>
+                        <li>Designed the <a href="https://github.com/Creevo-App/creevo-agent-library/tree/main" target="_blank">Creevo Agent Library (CAL)</a>, an open-source framework supporting multimodal tool responses.</li>
+                        <li>Managed a team of 4 researchers and built scaling cloud infrastructure so agents run in Docker with Godot.</li>
                     </ul>
                 </div>
 
                 <div class="item">
                     <div class="header-row">
-                        <h3>Anchovy</h3>
-                        <span class="tag">Full Stack Engineer</span>
+                        <h3>Software Contracting</h3>
+                        <span class="tag">Anchovy</span>
                     </div>
                     <p class="subtitle">05/25 - Present</p>
                     <ul>
+                        <li>Built P2P marketplace for recipe sharing for Anchovy in .NET and Angular.</li>
+                        <li>Built networking app that securely connects Rockwell PLC machines through mobile phones to a laptop anywhere in the world.</li>
                         <li>Redesigned and refactored a custom OpenAI SDK to support multimodal prompts.</li>
-                        <li>Designed and implemented a marketplace feature allowing users to create and sell cookbooks.
-                        </li>
+                        <li>Designed and implemented a marketplace feature allowing users to create and sell cookbooks.</li>
                         <li>Led a full app-wide UI/UX redesign for the Ionic Angular frontend.</li>
+                        <li>Restructured teams meeting to move the team over to agile.</li>
                     </ul>
                 </div>
 
@@ -161,18 +179,27 @@
                 </div>
             </section>
 
-            <!-- Skills -->
+            <section class="card technical">
+                <h2><i class="fas fa-microchip"></i> Technical Projects & Background</h2>
+                <div class="item">
+                    <p class="details"><strong>14 Years Game Development</strong> &mdash; Hobbyist Unity developer since 2012; experience with physics systems, procedural generation, game AI, and asset pipelines.</p>
+                    <p class="details"><strong>Creevo Agent Library (CAL)</strong> &mdash; <a href="https://github.com/Creevo-App/creevo-agent-library/tree/main" target="_blank">Open-source agent framework</a> supporting multimodal tool responses; integrated with LangSmith and Maxim AI for observability.</p>
+                    <p class="details"><strong>Custom ML Library</strong> &mdash; From-scratch ML framework with transformer support, optimization algorithms (SGD, Adam, Muon), and RL environment integration.</p>
+                    <p class="details"><strong>Chess AI</strong> &mdash; Developed undetectable approximately 2000 Elo engine using classification CNN with adapted minimax search.</p>
+                </div>
+            </section>
+
             <section class="card skills">
                 <h2><i class="fas fa-code"></i> Skills</h2>
                 <div class="skill-tags">
                     <span>Python</span><span>C++</span><span>Java</span><span>JavaScript</span>
+                    <span>.NET</span><span>Angular</span>
                     <span>TensorFlow</span><span>JAX</span><span>PyTorch</span><span>ReactJS</span>
                     <span>Docker</span><span>Kubernetes</span><span>AWS</span><span>LaTeX</span>
                     <span>LLMs</span><span>Generative AI</span><span>MCP</span>
                 </div>
             </section>
 
-            <!-- Projects / Placeholder -->
             <section class="card projects">
                 <h2><i class="fas fa-project-diagram"></i> Side Projects</h2>
                 <div class="project-buttons">
@@ -188,20 +215,15 @@
                         <span class="title">Custom ML Library</span>
                         <span class="desc">Transformer Support</span>
                     </a>
-                    <a href="#" class="project-btn disabled">
+                    <a href="https://github.com/MikilFoss/SpotifyData" target="_blank" class="project-btn">
                         <span class="title">Spotify Stats</span>
                         <span class="desc">Node + React</span>
                     </a>
                 </div>
             </section>
         </div>
-
-        <footer>
-            <p>&copy; 2025 Mikil Radu Foss. Built with a custom Neural Network in Vanilla JS.</p>
-        </footer>
     </div>
 
-    <!-- MathJax for LaTeX rendering -->
     <script>
         MathJax = {
             tex: {
