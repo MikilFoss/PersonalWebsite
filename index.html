@@ -18,7 +18,7 @@
         <div class="explore-modal-panel" role="dialog" aria-labelledby="explore-modal-title">
             <button type="button" class="explore-modal-close" aria-label="Close">&times;</button>
             <h3 id="explore-modal-title">Explore the network</h3>
-            <p class="explore-modal-intro">The hero trains a tiny classifier: given coordinates (x, y) in the square [&minus;1, 1]&sup2;, it predicts whether that point lies inside the axis-aligned bounding box of rasterized &ldquo;hi&rdquo;. Training uses random samples and binary cross-entropy (sigmoid on the logit). The dashed rectangle is the ground-truth box.</p>
+            <p class="explore-modal-intro">The hero trains a tiny classifier: given coordinates (x, y) in the square [&minus;1, 1]&sup2;, it predicts whether that point falls on the ink of rasterized &ldquo;Mikil Radu&rdquo; / &ldquo;Foss&rdquo; (glyph mask), not just a rectangle. Training uses random samples and binary cross-entropy (sigmoid on the logit). The faint dashed box is only the tight bounding rectangle around the text for reference.</p>
             <canvas id="nn-viz-canvas" class="explore-nn-viz" width="440" height="280" aria-label="Network graph"></canvas>
             <p id="explore-arch" class="explore-arch"></p>
             <div id="explore-weights" class="explore-weights"></div>

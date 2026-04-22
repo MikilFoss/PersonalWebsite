@@ -1,12 +1,13 @@
 /**
- * Hero: bbox BCE classifier. Warmup learns a baseline; Retrain perturbs it with noise
- * for fast convergence. Loss chart uses a wide rolling average of per-step BCE.
+ * Hero: glyph BCE classifier. Points are labeled on ink vs background of rasterized name.
+ * Warmup + noisy retrain; rolling average loss chart.
  */
 
 const CONFIG = {
-    targetText: "hi",
-    font: "bold 140px Outfit, sans-serif",
-    hiddenSize: 8,
+    targetLines: ["Mikil Radu", "Foss"],
+    font: "bold 44px Outfit, sans-serif",
+    lineHeightPx: 52,
+    hiddenSize: 14,
     learningRate: 0.42,
     batchSize: 4096,
     trainStepsPerFrame: 14,
@@ -193,19 +194,59 @@ let epoch = 0;
 let exploreModalOpen = false;
 
 let warmupBaselineSnapshot = null;
-let warmBaselineBboxKey = null;
+let warmBaselineCacheKey = null;
 
 const lossRawRing = [];
 let smoothedPlotHistory = [];
 
 let bbox = { xmin: -0.5, xmax: 0.5, ymin: -0.5, ymax: 0.5 };
+/** @type {{ width: number, height: number, data: Uint8ClampedArray } | null} */
+let glyphRaster = null;
+let lastMaskDigest = 0;
 
-function bboxToKey() {
-    return [bbox.xmin, bbox.xmax, bbox.ymin, bbox.ymax].map((v) => v.toFixed(5)).join("|");
+function maskDigestFromData(data, width, height) {
+    let h = 0;
+    const stride = 16 * 4;
+    for (let i = 3; i < data.length; i += stride) {
+        h = ((h << 5) - h + data[i]) | 0;
+    }
+    h ^= width * 73856093 ^ height * 19349663;
+    return h;
 }
 
-function insideBbox(x, y) {
-    return x >= bbox.xmin && x <= bbox.xmax && y >= bbox.ymin && y <= bbox.ymax ? 1 : 0;
+function warmBaselineKey() {
+    return [
+        canvas.width,
+        canvas.height,
+        CONFIG.targetLines.join("\n"),
+        CONFIG.font,
+        CONFIG.lineHeightPx,
+        lastMaskDigest
+    ].join("|");
+}
+
+function insideGlyph(nx, ny) {
+    if (!glyphRaster) {
+        return 0;
+    }
+    const w = glyphRaster.width;
+    const h = glyphRaster.height;
+    let px = Math.floor(((nx + 1) / 2) * w);
+    let py = Math.floor(((ny + 1) / 2) * h);
+    if (px < 0) {
+        px = 0;
+    }
+    if (py < 0) {
+        py = 0;
+    }
+    if (px >= w) {
+        px = w - 1;
+    }
+    if (py >= h) {
+        py = h - 1;
+    }
+    const a = glyphRaster.data[(py * w + px) * 4 + 3];
+    return a > 128 ? 1 : 0;
 }
 
 function resize() {
@@ -221,26 +262,41 @@ function resize() {
     lossCanvas.width = panel.clientWidth - 30;
     lossCanvas.height = Math.max(90, panel.clientHeight - used);
 
-    computeBboxFromText();
+    rebuildGlyphRaster();
     initNetwork();
 }
 
 window.addEventListener('resize', resize);
 
-function computeBboxFromText() {
+function rebuildGlyphRaster() {
     const osc = document.createElement('canvas');
     osc.width = Math.max(1, canvas.width);
     osc.height = Math.max(1, canvas.height);
     const osctx = osc.getContext('2d');
 
+    osctx.fillStyle = 'white';
+    osctx.fillRect(0, 0, osc.width, osc.height);
     osctx.font = CONFIG.font;
     osctx.fillStyle = 'black';
     osctx.textAlign = 'center';
     osctx.textBaseline = 'middle';
-    osctx.fillText(CONFIG.targetText, osc.width / 2, osc.height / 2);
+
+    const lines = CONFIG.targetLines;
+    const lh = CONFIG.lineHeightPx;
+    const totalH = lines.length * lh;
+    const startY = osc.height / 2 - totalH / 2 + lh / 2;
+    for (let i = 0; i < lines.length; i++) {
+        osctx.fillText(lines[i], osc.width / 2, startY + i * lh);
+    }
 
     const imgData = osctx.getImageData(0, 0, osc.width, osc.height);
     const data = imgData.data;
+    glyphRaster = {
+        width: osc.width,
+        height: osc.height,
+        data: new Uint8ClampedArray(data)
+    };
+    lastMaskDigest = maskDigestFromData(glyphRaster.data, osc.width, osc.height);
 
     let minPxX = osc.width;
     let minPxY = osc.height;
@@ -301,7 +357,7 @@ function sampleBatch() {
         const y = MathUtils.random(-1, 1);
         batchInputs.data[i * 2] = x;
         batchInputs.data[i * 2 + 1] = y;
-        batchLabels[i] = insideBbox(x, y);
+        batchLabels[i] = insideGlyph(x, y);
     }
 }
 
@@ -330,12 +386,12 @@ function runWarmupTraining() {
 }
 
 function ensureWarmBaseline() {
-    const key = bboxToKey();
-    if (warmupBaselineSnapshot && warmBaselineBboxKey === key) {
+    const key = warmBaselineKey();
+    if (warmupBaselineSnapshot && warmBaselineCacheKey === key) {
         return;
     }
     warmupBaselineSnapshot = runWarmupTraining();
-    warmBaselineBboxKey = key;
+    warmBaselineCacheKey = key;
 }
 
 function initNetwork() {
@@ -397,15 +453,11 @@ function drawMainCanvas() {
     const x1 = normToCanvasX(bbox.xmax);
     const y0 = normToCanvasY(bbox.ymin);
     const y1 = normToCanvasY(bbox.ymax);
-    ctx.strokeStyle = '#2c2c2c';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = 'rgba(44, 44, 44, 0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
     ctx.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
     ctx.setLineDash([]);
-
-    ctx.strokeStyle = 'rgba(210, 105, 30, 0.85)';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
 }
 
 function drawLoss() {
@@ -613,7 +665,7 @@ function refreshExploreText() {
     if (!archEl || !mlp) {
         return;
     }
-    archEl.textContent = `Architecture: 2 inputs -> ${mlp.hiddenSize} ReLU -> 1 logit (batch ${CONFIG.batchSize}). A long offline warmup fits the bbox task; Retrain copies those weights with small Gaussian noise so the heatmap snaps back quickly. Chart = rolling mean BCE over the last ${CONFIG.rollWindow} optimizer steps.`;
+    archEl.textContent = `Architecture: 2 inputs -> ${mlp.hiddenSize} ReLU -> 1 logit (batch ${CONFIG.batchSize}). Labels are ink vs background for rasterized "${CONFIG.targetLines.join(" ")}". Warmup fits that boundary; Retrain adds small Gaussian noise to weights. Chart = rolling mean BCE over the last ${CONFIG.rollWindow} optimizer steps. Dashed box is the ink bounding box (reference only).`;
 }
 
 function animate() {
